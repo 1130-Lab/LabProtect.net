@@ -6,6 +6,7 @@ LabProtect contains a working example of how to protect against debugger attachm
 
 ## Features
 - Tricks provided by the [AntiCrack-DotNet](https://github.com/AdvDebug/AntiCrack-DotNet) project ported to .NET 8. The calling of the tricks is done via the SecureAppManager class in EncryptedApp.Common. These tricks prevent tools like dnSpy and CheatEngine from accessing and decompiling your application.
+	- I have yet to look into each trick. This initial release calls all of them, and the code is more or less left intact except for some performance enhancements. There is a lot to dig into in order to make AntiCrack-DotNet performant and only call what is necessary while retaining its functionality.
 - Importing and decryption of dlls at runtime to prevent static reverse engineering such as ilSpy. Your DLLs will not be stored on disk, but you can write your code using them.
 	- How it works:
 		- Copy DLLs you do not wish to reside on disk to your server (in the example it's ASP.NET but could be gRPC, ZMQ or any other type of server.)
