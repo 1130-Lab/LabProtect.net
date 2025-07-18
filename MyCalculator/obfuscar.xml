@@ -1,0 +1,6 @@
+﻿<Obfuscator>
+	<var name="InPath" value="bin\Debug\net8.0" />
+	<var name="OutPath" value="obfuscated" />
+
+	<module file="$(InPath)\MyCalculator.dll" />
+</Obfuscator>

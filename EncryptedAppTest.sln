@@ -1,0 +1,55 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36221.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedAppTest", "EncryptedAppTest\EncryptedAppTest.csproj", "{47046ED1-9009-4526-AB00-574EED29ADCB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyCalculator", "MyCalculator\MyCalculator.csproj", "{DFA3FCBD-B4E7-4A15-A3AB-5681A32C8C82}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyStringAppender", "MyStringAppender\MyStringAppender.csproj", "{AA0076A5-D59C-48FE-8E45-187AA844F07C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedAppTestServer", "EncryptedAppTestServer\EncryptedAppTestServer.csproj", "{76D33C85-1E97-4C1C-A809-8C356E482EDE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EncryptedApp.Common", "EncryptedApp.Common\EncryptedApp.Common.csproj", "{FF201E51-8C65-45A3-BC9A-E5DC3F6A02C1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnencryptedAppTest", "UnencryptedAppTest\UnencryptedAppTest.csproj", "{65446199-1CCE-4A51-87B0-445B06C7AE2B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{47046ED1-9009-4526-AB00-574EED29ADCB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{47046ED1-9009-4526-AB00-574EED29ADCB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{47046ED1-9009-4526-AB00-574EED29ADCB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{47046ED1-9009-4526-AB00-574EED29ADCB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DFA3FCBD-B4E7-4A15-A3AB-5681A32C8C82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFA3FCBD-B4E7-4A15-A3AB-5681A32C8C82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFA3FCBD-B4E7-4A15-A3AB-5681A32C8C82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFA3FCBD-B4E7-4A15-A3AB-5681A32C8C82}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AA0076A5-D59C-48FE-8E45-187AA844F07C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AA0076A5-D59C-48FE-8E45-187AA844F07C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AA0076A5-D59C-48FE-8E45-187AA844F07C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AA0076A5-D59C-48FE-8E45-187AA844F07C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76D33C85-1E97-4C1C-A809-8C356E482EDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76D33C85-1E97-4C1C-A809-8C356E482EDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76D33C85-1E97-4C1C-A809-8C356E482EDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76D33C85-1E97-4C1C-A809-8C356E482EDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FF201E51-8C65-45A3-BC9A-E5DC3F6A02C1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF201E51-8C65-45A3-BC9A-E5DC3F6A02C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF201E51-8C65-45A3-BC9A-E5DC3F6A02C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF201E51-8C65-45A3-BC9A-E5DC3F6A02C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65446199-1CCE-4A51-87B0-445B06C7AE2B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65446199-1CCE-4A51-87B0-445B06C7AE2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65446199-1CCE-4A51-87B0-445B06C7AE2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65446199-1CCE-4A51-87B0-445B06C7AE2B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {362DB36E-8ABD-437F-912F-F43A0CF75551}
+	EndGlobalSection
+EndGlobal
