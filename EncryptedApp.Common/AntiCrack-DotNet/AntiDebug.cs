@@ -1,13 +1,8 @@
-﻿using System;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
+﻿using System.Diagnostics;
 using System.Management;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 using static AntiCrack_DotNet.Structs;
 
 namespace AntiCrack_DotNet
@@ -334,7 +329,7 @@ namespace AntiCrack_DotNet
                             {
                                 if (Utils.Contains(title, BadWindows))
                                 {
-                                    GetWindow.Close();
+                                    GetWindow.Kill();
                                     return true;
                                 }
                             }
@@ -378,7 +373,7 @@ namespace AntiCrack_DotNet
                             {
                                 if (Utils.Contains(title, BadWindows))
                                 {
-                                    getWindow.Close();
+                                    getWindow.Kill();
                                     _windowAntiDebugEnabled = true;
                                 }
                             }

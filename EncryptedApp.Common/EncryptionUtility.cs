@@ -87,8 +87,11 @@ namespace EncryptedApp.Common
             catch { return null; }
             finally
             {
-                Array.Clear(password, 0, password.Length);
-                GC.Collect();
+                if (clearKey)
+                {
+                    Array.Clear(password, 0, password.Length);
+                    GC.Collect();
+                }
             }
         }
 

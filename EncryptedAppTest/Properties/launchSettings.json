@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "EncryptedAppTest": {
+      "commandName": "Project",
+      "commandLineArgs": "--dumpchecksum --address=https://localhost:7046"
+    }
+  }
+}

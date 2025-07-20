@@ -1,13 +1,8 @@
-﻿using System;
-using System.IO;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Net.Sockets;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
-using System.Linq;
-using static AntiCrack_DotNet.Structs;
-using System.Net;
 
 namespace AntiCrack_DotNet
 {

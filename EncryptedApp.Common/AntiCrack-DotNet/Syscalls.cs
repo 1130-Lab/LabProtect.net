@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Management;
+﻿using System.Management;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using static AntiCrack_DotNet.Structs;

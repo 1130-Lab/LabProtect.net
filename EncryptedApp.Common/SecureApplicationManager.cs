@@ -1,4 +1,5 @@
 ﻿using AntiCrack_DotNet;
+using EncryptedApp.Common.AntiCrack_DotNet;
 using System.Reflection;
 
 namespace EncryptedApp.Common
@@ -10,6 +11,7 @@ namespace EncryptedApp.Common
         private readonly bool IsAntiInjectionEnabled = true;
         private readonly bool IsOtherDetectionChecksEnabled = true;
         private readonly bool IsAntiHookChecksEnabled = true;
+        private readonly bool IsAntiSniffChecksEnabled = true;
         private readonly bool _useSysCalls;
         private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
 
@@ -19,7 +21,8 @@ namespace EncryptedApp.Common
                                         bool isAntiVirtualizationChecksEnabled = true, 
                                         bool isAntiInjectionEnabled = true, 
                                         bool isOtherDetectionChecksEnabled = true, 
-                                        bool isAntiHookChecksEnabled = true)
+                                        bool isAntiHookChecksEnabled = true,
+                                        bool isAntiSniffChecksEnabled = true)
         {
             _useSysCalls = useSysCalls;
             IsAntiDebugChecksEnabled = isAntiDebugChecksEnabled;
@@ -27,17 +30,17 @@ namespace EncryptedApp.Common
             IsAntiInjectionEnabled = isAntiInjectionEnabled;
             IsOtherDetectionChecksEnabled = isOtherDetectionChecksEnabled;
             IsAntiHookChecksEnabled = isAntiHookChecksEnabled;
+            IsAntiSniffChecksEnabled = isAntiSniffChecksEnabled;
 
             if (isHooksEnabled)
             {
+                // This currently breaks the application, so it's commented out. Need to investigate further. Required a port from .NET Framework to .NET 8.
                 //Hooks.PreventUnauthorizedFunctionPointerRetrieval(true, new MethodInfo[] { typeof(Utils).GetMethod("GetPointer", BindingFlags.Public | BindingFlags.Static) }, null);
             }
         }
 
         public async Task Run(CancellationTokenSource source)
         {
-            /*
-            Task[] checkTasks = new Task[5];
             while (!source.IsCancellationRequested)
             {
                 await _semaphore.WaitAsync(source.Token);
@@ -45,59 +48,39 @@ namespace EncryptedApp.Common
                 {
                     if (IsAntiDebugChecksEnabled)
                     {
-                        checkTasks[0] = Task.Factory.StartNew(AntiDebugChecks);
-                    }
-                    if (IsAntiVirtualizationChecksEnabled)
-                    {
-                        checkTasks[1] = Task.Factory.StartNew(AntiVirtualizationChecks);
-                    }
-                    if (IsAntiInjectionEnabled)
-                    {
-                        checkTasks[2] = Task.Factory.StartNew(AntiInjectionChecks);
-                    }
-                    if (IsOtherDetectionChecksEnabled)
-                    {
-                        checkTasks[3] = Task.Factory.StartNew(OtherDetectionChecks);
-                    }
-                    if (IsAntiHookChecksEnabled)
-                    {
-                        checkTasks[4] = Task.Factory.StartNew(HooksDetectionChecks);
-                    }
-                    Task.WaitAll(checkTasks);
-            */
-            Task[] checkTasks = new Task[5];
-            while (!source.IsCancellationRequested)
-            {
-                await _semaphore.WaitAsync(source.Token);
-                try
-                {
-                    if (IsAntiDebugChecksEnabled)
-                    {
-                        //checkTasks[0] = Task.Factory.StartNew(AntiDebugChecks);
                         AntiDebugChecks();
                     }
                     if (IsAntiVirtualizationChecksEnabled)
                     {
-                        //checkTasks[1] = Task.Factory.StartNew(AntiVirtualizationChecks);
                         AntiVirtualizationChecks();
                     }
                     if (IsAntiInjectionEnabled)
                     {
-                        //checkTasks[2] = Task.Factory.StartNew(AntiInjectionChecks);
                         AntiInjectionChecks();
                     }
                     if (IsOtherDetectionChecksEnabled)
                     {
-                        //checkTasks[3] = Task.Factory.StartNew(OtherDetectionChecks);
                         OtherDetectionChecks();
                     }
                     if (IsAntiHookChecksEnabled)
                     {
-                        //checkTasks[4] = Task.Factory.StartNew(HooksDetectionChecks);
                         AntiHooksDetectionChecks();
                     }
-                    //Task.WaitAll(checkTasks);
+                    if (IsAntiSniffChecksEnabled)
+                    {
+                        AntiSniffChecks();
+                    }
                     await Task.Delay(500, source.Token); // Delay to avoid busy waiting
+                }
+                catch (OperationCanceledException)
+                {
+                    // Handle cancellation gracefully
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"An error occurred: {ex.Message}");
+                    // Optionally log the exception or take other actions
                 }
                 finally
                 {
@@ -176,6 +159,11 @@ namespace EncryptedApp.Common
             HooksDetection.DetectHooks();
             HooksDetection.DetectGuardPagesHooks(_useSysCalls);
             HooksDetection.DetectCLRHooks();
+        }
+
+        private void AntiSniffChecks()
+        {
+            AntiSniff.FindWindowAntiSniff();
         }
     }
 }
