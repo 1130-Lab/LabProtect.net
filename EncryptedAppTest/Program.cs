@@ -1,4 +1,6 @@
-﻿using EncryptedApp.Common;
+﻿using AntiCrack_DotNet;
+using EncryptedApp.Common;
+using EncryptedApp.Common.AntiCrack_DotNet;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -8,13 +10,28 @@ namespace EncryptedAppTest
     internal class Program
     {
         private static Dictionary<string, Assembly> _loadedAssemblies = new Dictionary<string, Assembly>();
-        private static SecureApplicationManager _secureApp = new SecureApplicationManager(false, false, false, false, false, false, false, true);
         private static CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
-        private static Task? _secureAppChecker;
+        private static IAntiCrackMonitor _antiSniff = new AntiSniff(_cancellationTokenSource);
+        private static IAntiCrackMonitor _antiDebug = new AntiDebug(_cancellationTokenSource);
         private static string _httpsAddress = "https://localhost:7046/";
 
         static async Task Main(string[] args)
         {
+            _antiSniff.Start();
+            _antiSniff.OnDetected += () =>
+            {
+                Console.WriteLine("Anti-sniff detected! Exiting...");
+                Environment.Exit(1);
+            };
+#if !DEBUG
+            _antiDebug.Start();
+            _antiDebug.OnDetected += () =>
+            {
+                Console.WriteLine("Anti-debug detected! Exiting...");
+                Environment.Exit(1);
+            };
+#endif 
+
             ParseArgs(args);
             HttpClient client = new HttpClient();
             client.BaseAddress = new Uri(_httpsAddress);
@@ -61,7 +78,6 @@ namespace EncryptedAppTest
             }
             MyEncryptedApp app = new MyEncryptedApp();
             app.Run();
-            _secureAppChecker = Task.Run(() => _secureApp.Run(_cancellationTokenSource), _cancellationTokenSource.Token);
             Console.WriteLine("Secure application manager started.");
             Console.WriteLine("Press any key to exit...");
             Console.ReadLine();
@@ -91,10 +107,21 @@ namespace EncryptedAppTest
 
         private static byte[] GetSHA512Checksum()
         {
-            byte[] bytes = File.ReadAllBytes($"{Assembly.GetExecutingAssembly().GetName().Name}.exe");
+            string? assemblyName = Assembly.GetExecutingAssembly().GetName().Name;
+            if(assemblyName == null)
+            {
+                throw new Exception("Assembly name is null.");
+            }
+            byte[] executableBytes = File.ReadAllBytes($"{assemblyName}.exe");
+            byte[] dllBytes = File.ReadAllBytes($"{assemblyName}.dll");
+
+            byte[] allBytes = new byte[executableBytes.Length + dllBytes.Length];
+            Buffer.BlockCopy(executableBytes, 0, allBytes, 0, executableBytes.Length);
+            Buffer.BlockCopy(dllBytes, 0, allBytes, executableBytes.Length, dllBytes.Length);
+
             using (SHA512 sha = SHA512.Create())
             {
-                return sha.ComputeHash(bytes);
+                return sha.ComputeHash(allBytes);
             }
         }
     }

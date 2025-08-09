@@ -1,13 +1,13 @@
-﻿using System.Diagnostics;
+﻿using EncryptedApp.Common.AntiCrack_DotNet;
+using System.Diagnostics;
 using System.Management;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using static AntiCrack_DotNet.Structs;
 
 namespace AntiCrack_DotNet
 {
-    public sealed class AntiDebug
+    public sealed class AntiDebug : IAntiCrackMonitor
     {
         #region WinApi
 
@@ -91,12 +91,91 @@ namespace AntiCrack_DotNet
 
         #endregion
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ExecutionDelegate();
+
+        private SemaphoreSlim _taskLock = new SemaphoreSlim(1, 1);
+        private HashSet<string> _badWindowNames = new HashSet<string>() { "x32dbg", "x64dbg", "windbg", "ollydbg", "dnspy", "immunity debugger", "hyperdbg", "cheat engine", "cheatengine", "ida" };
+        private long CONTEXT_DEBUG_REGISTERS = 0x00010000L | 0x00000010L;
+        private ManagementEventWatcher? _watcher;
+        private WqlEventQuery? _startQuery = OperatingSystem.IsWindows() ? new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace") : null;
+        private readonly bool _windows = OperatingSystem.IsWindows();
+
+        public Action? OnDetected { get; set; }
+        public CancellationTokenSource CancellationTokenSource { get; }
+
+        public AntiDebug(CancellationTokenSource cancellationTokenSource)
+        {
+            CancellationTokenSource = cancellationTokenSource ?? throw new ArgumentNullException(nameof(cancellationTokenSource));
+            if (CancellationTokenSource.IsCancellationRequested)
+            {
+                throw new OperationCanceledException("Cancellation has already been requested.");
+            }
+        }
+
+        public async Task PerformChecks(int timeInterval)
+        {
+            if(_windows)
+            {
+                StartWindowAntiDebug();
+            }
+            if(AntiDebugAttach())
+            {
+                Trace.WriteLine("AntiDebugAttach was successful, debugger is prevented from attaching.");
+            }
+            else
+            {
+                Trace.WriteLine("AntiDebugAttach failed, debugger may attach.");
+            }
+            while (!CancellationTokenSource.IsCancellationRequested)
+            {
+                await _taskLock.WaitAsync(CancellationTokenSource.Token);
+                try
+                {
+                    if (IsDebuggerPresentCheck())
+                        OnDetected?.Invoke();
+                    if (DebuggerIsAttached())
+                        OnDetected?.Invoke();
+                    if (BeingDebuggedCheck())
+                        OnDetected?.Invoke();
+                    if (NtGlobalFlagCheck())
+                        OnDetected?.Invoke();
+                    if (NtSetDebugFilterStateAntiDebug())
+                        OnDetected?.Invoke();
+                    if (PageGuardAntiDebug())
+                        OnDetected?.Invoke();
+                    if (HardwareRegistersBreakpointsDetection())
+                        OnDetected?.Invoke();
+                    if (!_windows && CheckCrossPlatformAntiDebug())
+                        OnDetected?.Invoke();
+                    if (NtQueryInformationProcessCheck_ProcessDebugFlags(_windows))
+                        OnDetected?.Invoke();
+                    if (NtQueryInformationProcessCheck_ProcessDebugPort(_windows))
+                        OnDetected?.Invoke();
+                    if (NtQueryInformationProcessCheck_ProcessDebugObjectHandle(_windows))
+                        OnDetected?.Invoke();
+                    if (NtCloseAntiDebug_InvalidHandle(_windows))
+                        OnDetected?.Invoke();
+                    if (NtCloseAntiDebug_ProtectedHandle(_windows))
+                        OnDetected?.Invoke();
+                    if (ParentProcessAntiDebug(_windows))
+                        OnDetected?.Invoke();
+                }
+                finally
+                {
+                    _taskLock.Release();
+                }
+                await Task.Delay(timeInterval, CancellationTokenSource.Token);
+            }
+            StopWindowAntiDebug();
+        }
+
         /// <summary>
         /// Attempts to close an invalid handle to detect debugger presence.
         /// <param name="Syscall">specifies if we should use syscall to call the WinAPI functions.</param>
         /// </summary>
         /// <returns>Returns true if an exception is caught, indicating no debugger, otherwise false.</returns>
-        public static bool NtCloseAntiDebug_InvalidHandle(bool Syscall)
+        public bool NtCloseAntiDebug_InvalidHandle(bool Syscall)
         {
             try
             {
@@ -118,8 +197,8 @@ namespace AntiCrack_DotNet
         /// Attempts to close a protected handle to detect debugger presence.
         /// <param name="Syscall">specifies if we should use syscall to call the WinAPI functions.</param>
         /// </summary>
-        /// <returns>Returns true if an exception is caught, indicating no debugger, otherwise false.</returns>
-        public static bool NtCloseAntiDebug_ProtectedHandle(bool Syscall)
+        /// <returns>Returns true if no exception is caught, indicating a debugger, otherwise false.</returns>
+        public bool NtCloseAntiDebug_ProtectedHandle(bool Syscall)
         {
             string RandomMutexName = new Random().Next(int.MinValue, int.MaxValue).ToString();
             IntPtr hMutex = CreateMutexA(IntPtr.Zero, false, RandomMutexName);
@@ -132,11 +211,11 @@ namespace AntiCrack_DotNet
                     Syscalls.SyscallNtClose(hMutex);
                 else
                     NtClose(hMutex);
-                Result = false;
+                Result = true;
             }
             catch
             {
-                Result = true;
+                Result = false;
             }
             SetHandleInformation(hMutex, HANDLE_FLAG_PROTECT_FROM_CLOSE, 0);
             NtClose(hMutex);
@@ -147,7 +226,7 @@ namespace AntiCrack_DotNet
         /// Checks if a debugger is attached to the process.
         /// </summary>
         /// <returns>Returns true if a debugger is attached, otherwise false.</returns>
-        public static bool DebuggerIsAttached()
+        public bool DebuggerIsAttached()
         {
             return Debugger.IsAttached;
         }
@@ -156,10 +235,12 @@ namespace AntiCrack_DotNet
         /// Checks if a debugger is present using the IsDebuggerPresent API.
         /// </summary>
         /// <returns>Returns true if a debugger is present, otherwise false.</returns>
-        public static bool IsDebuggerPresentCheck()
+        public bool IsDebuggerPresentCheck()
         {
             if (IsDebuggerPresent())
+            {
                 return true;
+            }
             return false;
         }
 
@@ -167,7 +248,7 @@ namespace AntiCrack_DotNet
         /// Checks for the BeingDebugged flag directly.
         /// </summary>
         /// <returns>Returns true if a debugger is present, otherwise false.</returns>
-        public static bool BeingDebuggedCheck()
+        public bool BeingDebuggedCheck()
         {
             byte[] Code = new byte[30];
             if (IntPtr.Size == 8)
@@ -182,8 +263,10 @@ namespace AntiCrack_DotNet
                     Delegates.GenericInt Executed = (Delegates.GenericInt)Marshal.GetDelegateForFunctionPointer(BeingDebugged, typeof(Delegates.GenericInt));
                     int Result = Executed();
                     Utils.FreeCode(BeingDebugged);
-                    if(Result == 1)
+                    if (Result == 1)
+                    {
                         return true;
+                    }
                 }
                 catch
                 {
@@ -197,7 +280,7 @@ namespace AntiCrack_DotNet
         /// Checks for the NtGlobalFlag directly.
         /// </summary>
         /// <returns>Returns true if a debugger is present, otherwise false.</returns>
-        public static bool NtGlobalFlagCheck()
+        public bool NtGlobalFlagCheck()
         {
             byte[] Code = new byte[30];
             if (IntPtr.Size == 8)
@@ -213,7 +296,9 @@ namespace AntiCrack_DotNet
                     int Result = Executed();
                     Utils.FreeCode(NtGlobalFlag);
                     if (Result == 1)
+                    {
                         return true;
+                    }
                 }
                 catch
                 {
@@ -228,7 +313,7 @@ namespace AntiCrack_DotNet
         /// <param name="Syscall">specifies if we should use syscall to call the WinAPI functions.</param>
         /// </summary>
         /// <returns>Returns true if debug flags are set, otherwise false.</returns>
-        public static bool NtQueryInformationProcessCheck_ProcessDebugFlags(bool Syscall)
+        public bool NtQueryInformationProcessCheck_ProcessDebugFlags(bool Syscall)
         {
             uint ProcessDebugFlags = 0;
             uint Class = 0x1F;
@@ -239,7 +324,9 @@ namespace AntiCrack_DotNet
             else
                 NtQueryInformationProcess(new IntPtr(-1), 0x1F, out ProcessDebugFlags, sizeof(uint), 0);
             if (ProcessDebugFlags == 0)
+            {
                 return true;
+            }
             return false;
         }
 
@@ -248,7 +335,7 @@ namespace AntiCrack_DotNet
         /// <param name="Syscall">specifies if we should use syscalls to call the WinAPI functions.</param>.
         /// </summary>
         /// <returns>Returns true if a debug port is detected, otherwise false.</returns>
-        public static bool NtQueryInformationProcessCheck_ProcessDebugPort(bool Syscall)
+        public bool NtQueryInformationProcessCheck_ProcessDebugPort(bool Syscall)
         {
             uint DebuggerPresent = 0;
             uint Size = sizeof(uint);
@@ -260,7 +347,9 @@ namespace AntiCrack_DotNet
             else
                 NtQueryInformationProcess(new IntPtr(-1), 7, out DebuggerPresent, Size, 0);
             if (DebuggerPresent != 0)
+            {
                 return true;
+            }
             return false;
         }
 
@@ -269,7 +358,7 @@ namespace AntiCrack_DotNet
         /// <param name="Syscall">specifies if we should use syscall to call the WinAPI functions.</param>
         /// </summary>
         /// <returns>Returns true if a debug object handle is detected, otherwise false.</returns>
-        public static bool NtQueryInformationProcessCheck_ProcessDebugObjectHandle(bool Syscall)
+        public bool NtQueryInformationProcessCheck_ProcessDebugObjectHandle(bool Syscall)
         {
             IntPtr hDebugObject = IntPtr.Zero;
             uint Size = sizeof(uint);
@@ -281,15 +370,17 @@ namespace AntiCrack_DotNet
             else
                 NtQueryInformationProcess(new IntPtr(-1), 0x1E, out hDebugObject, Size, 0);
             if (hDebugObject != IntPtr.Zero)
+            {
                 return true;
+            }
             return false;
         }
 
         /// <summary>
         /// Patches the DbgUiRemoteBreakin and DbgBreakPoint functions to prevent debugger attachment.
         /// </summary>
-        /// <returns>Returns "Success" if the patching was successful, otherwise "Failed".</returns>
-        public static string AntiDebugAttach()
+        /// <returns>Returns true if the patching was successful, otherwise false.</returns>
+        public bool AntiDebugAttach()
         {
             IntPtr NtdllModule = Utils.LowLevelGetModuleHandle("ntdll.dll");
             IntPtr DbgUiRemoteBreakinAddress = Utils.LowLevelGetProcAddress(NtdllModule, "DbgUiRemoteBreakin");
@@ -299,8 +390,8 @@ namespace AntiCrack_DotNet
             bool Status = WriteProcessMemory(Process.GetCurrentProcess().SafeHandle, DbgUiRemoteBreakinAddress, Int3InvaildCode, 1, 0);
             bool Status2 = WriteProcessMemory(Process.GetCurrentProcess().SafeHandle, DbgBreakPointAddress, RetCode, 1, 0);
             if (Status && Status2)
-                return "Success";
-            return "Failed";
+                return true;
+            return false;
         }
 
         /// <summary>
@@ -308,93 +399,77 @@ namespace AntiCrack_DotNet
         /// Requires elevated permissions.
         /// </summary>
         /// <returns>Returns true if a known debugger window is detected, otherwise false.</returns>
-        private static HashSet<string> _badWindowNames = new HashSet<string>() { "x32dbg", "x64dbg", "windbg", "ollydbg", "dnspy", "immunity debugger", "hyperdbg", "cheat engine", "cheatengine", "ida" };
-        private static bool _windowAntiDebugInitialized = false;
-        private static bool _windowAntiDebugEnabled = false;
-        public static bool FindWindowAntiDebug()
+        public void StartWindowAntiDebug()
         {
-            if (OperatingSystem.IsWindows() == false)
+            if (!_windows)
             {
-                Process[] GetProcesses = Process.GetProcesses();
-                foreach (Process GetWindow in GetProcesses)
-                {
-                    try
-                    {
-                        if (GetWindow.MainWindowHandle != IntPtr.Zero)
-                        {
-                            string title = GetWindow.MainWindowTitle;
-                            if (string.IsNullOrEmpty(title)) continue;
+                throw new PlatformNotSupportedException("Window anti-debugging is only supported on Windows.");
+            }
+            else 
+            {
+                _watcher = new ManagementEventWatcher(_startQuery);
+                _watcher.EventArrived += Watcher_EventArrived;
+                _watcher.Start();
+            }
+        }
 
-                            foreach (string BadWindows in _badWindowNames)
+        public void StopWindowAntiDebug()
+        {
+            if (_windows && _watcher != null)
+            {
+                _watcher.Stop();
+                _watcher.Dispose();
+            }
+        }
+
+        private void Watcher_EventArrived(object sender, EventArrivedEventArgs e)
+        {
+            string processName = e.NewEvent.Properties["ProcessName"].Value.ToString();
+
+            foreach (string badWindow in _badWindowNames)
+            {
+                if (Utils.Contains(processName!, badWindow))
+                {
+                    OnDetected?.Invoke();
+                }
+            }
+        }
+
+        public bool CheckCrossPlatformAntiDebug()
+        {
+            Process[] GetProcesses = Process.GetProcesses();
+            foreach (Process GetWindow in GetProcesses)
+            {
+                try
+                {
+                    if (GetWindow.MainWindowHandle != IntPtr.Zero)
+                    {
+                        string title = GetWindow.MainWindowTitle;
+                        if (string.IsNullOrEmpty(title)) continue;
+
+                        foreach (string BadWindows in _badWindowNames)
+                        {
+                            if (Utils.Contains(title, BadWindows))
                             {
-                                if (Utils.Contains(title, BadWindows))
-                                {
-                                    GetWindow.Kill();
-                                    return true;
-                                }
+                                return true;
                             }
                         }
                     }
-                    catch
-                    {
-                        continue;
-                    }
+                }
+                catch
+                {
+                    continue;
                 }
             }
-            else if (OperatingSystem.IsWindows() && !_windowAntiDebugInitialized)
-            {
-                var startQuery = new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace");
-                using var watcher = new ManagementEventWatcher(startQuery);
-                watcher.EventArrived += (s, e) =>
-                {
-                    string processName = e.NewEvent.Properties["ProcessName"].Value.ToString();
-
-                    foreach (string BadWindows in _badWindowNames)
-                    {
-                        if (Utils.Contains(processName!, BadWindows))
-                        {
-                            _windowAntiDebugEnabled = true;
-                        }
-                    }
-                };
-                watcher.Start();
-
-                Process[] GetProcesses = Process.GetProcesses();
-                foreach (Process getWindow in GetProcesses)
-                {
-                    try
-                    {
-                        if (getWindow.MainWindowHandle != IntPtr.Zero)
-                        {
-                            string title = getWindow.MainWindowTitle;
-                            if (string.IsNullOrEmpty(title)) continue;
-
-                            foreach (string BadWindows in _badWindowNames)
-                            {
-                                if (Utils.Contains(title, BadWindows))
-                                {
-                                    getWindow.Kill();
-                                    _windowAntiDebugEnabled = true;
-                                }
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-                }
-            }
-            return _windowAntiDebugEnabled;
+            return false;
         }
 
         /// <summary>
         /// Checks if the foreground window belongs to a known debugger.
         /// </summary>
         /// <returns>Returns true if a known debugger window is detected, otherwise false.</returns>
-        public static bool NtUserGetForegroundWindowAntiDebug()
+        public bool NtUserGetForegroundWindowAntiDebug()
         {
-            string[] BadWindowNames = { "x32dbg", "x64dbg", "windbg", "ollydbg", "dnspy", "immunity debugger", "hyperdbg", "debug", "debugger", "cheat engine", "cheatengine", "ida" };
             IntPtr HWND = NtUserGetForegroundWindow();
             if (HWND != IntPtr.Zero)
             {
@@ -403,7 +478,7 @@ namespace AntiCrack_DotNet
                 {
                     StringBuilder WindowName = new StringBuilder(WindowLength + 1);
                     GetWindowTextA(HWND, WindowName, WindowLength + 1);
-                    foreach (string BadWindows in BadWindowNames)
+                    foreach (string BadWindows in _badWindowNames)
                     {
                         if (Utils.Contains(WindowName.ToString().ToLower(), BadWindows))
                         {
@@ -419,7 +494,7 @@ namespace AntiCrack_DotNet
         /// Hides threads from the debugger by setting the NtSetInformationThread.
         /// </summary>
         /// <returns>Returns "Success" if the threads were hidden successfully, otherwise "Failed".</returns>
-        public static string HideThreadsAntiDebug()
+        public bool HideThreadsAntiDebug()
         {
             try
             {
@@ -455,70 +530,20 @@ namespace AntiCrack_DotNet
                     }
                 }
                 if (!AnyThreadFailed)
-                    return "Success";
-                return "Failed";
-            }
-            catch
-            {
-                return "Failed";
-            }
-        }
-
-        /// <summary>
-        /// Uses GetTickCount to detect debugger presence.
-        /// </summary>
-        /// <returns>Returns true if debugger presence is detected, otherwise false.</returns>
-        public static bool GetTickCountAntiDebug()
-        {
-            uint Start = GetTickCount();
-            Thread.Sleep(0x10);
-            return (GetTickCount() - Start) > 0x10;
-        }
-
-        /// <summary>
-        /// Uses OutputDebugString to detect debugger presence.
-        /// </summary>
-        /// <returns>Returns true if debugger presence is detected, otherwise false.</returns>
-        public static bool OutputDebugStringAntiDebug()
-        {
-            Debugger.Log(0, null, "just testing some stuff...");
-            if (Marshal.GetLastWin32Error() == 0)
-                return true;
-            return false;
-        }
-
-        /// <summary>
-        /// Exploits a format string vulnerability in OllyDbg.
-        /// </summary>
-        public static void OllyDbgFormatStringExploit()
-        {
-            Debugger.Log(0, null, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s");
-        }
-
-        /// <summary>
-        /// Triggers a debug break to detect debugger presence.
-        /// </summary>
-        /// <returns>Returns true if an exception is caught, indicating no debugger, otherwise false.</returns>
-        public static bool DebugBreakAntiDebug()
-        {
-            try
-            {
-                Utils.CallInternalCLRFunction("BreakInternal", typeof(Debugger), BindingFlags.NonPublic | BindingFlags.Static, null, null);
+                    return true;
                 return false;
             }
             catch
             {
-                return true;
+                return false;
             }
         }
-
-        private static long CONTEXT_DEBUG_REGISTERS = 0x00010000L | 0x00000010L;
 
         /// <summary>
         /// Detects hardware breakpoints by checking debug registers.
         /// </summary>
         /// <returns>Returns true if hardware breakpoints are detected, otherwise false.</returns>
-        public static bool HardwareRegistersBreakpointsDetection()
+        public bool HardwareRegistersBreakpointsDetection()
         {
             CONTEXT Context = new CONTEXT();
             Context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
@@ -555,6 +580,7 @@ namespace AntiCrack_DotNet
                         }
                     }
                     NtClose(hThread);
+                    return true;
                 }
             }
             return false;
@@ -565,7 +591,7 @@ namespace AntiCrack_DotNet
         /// </summary>
         /// <param name="Path">The path to clean.</param>
         /// <returns>The cleaned path.</returns>
-        private static string CleanPath(string Path)
+        private string? CleanPath(string Path)
         {
             string CleanedPath = null;
             foreach (char Null in Path)
@@ -583,7 +609,7 @@ namespace AntiCrack_DotNet
         /// <param name="Syscall">specifies if we should use syscall to call the WinAPI functions.</param>
         /// </summary>
         /// <returns>Returns true if the parent process is a debugger, otherwise false.</returns>
-        public static bool ParentProcessAntiDebug(bool Syscall)
+        public bool ParentProcessAntiDebug(bool Syscall)
         {
             try
             {
@@ -621,21 +647,18 @@ namespace AntiCrack_DotNet
         /// Uses NtSetDebugFilterState to prevent debugging.
         /// </summary>
         /// <returns>Returns true if the filter state was set successfully, otherwise false.</returns>
-        public static bool NtSetDebugFilterStateAntiDebug()
+        public bool NtSetDebugFilterStateAntiDebug()
         {
             if (NtSetDebugFilterState(0, 0, true) != 0)
                 return false;
             return true;
         }
 
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate int ExecutionDelegate();
-
         /// <summary>
         /// Uses page guard to detect debugger presence by executing a function pointer.
         /// </summary>
         /// <returns>Returns true if debugger presence is detected, otherwise false.</returns>
-        public static bool PageGuardAntiDebug()
+        public bool PageGuardAntiDebug()
         {
             SYSTEM_INFO SysInfo = new SYSTEM_INFO();
             GetSystemInfo(out SysInfo);
@@ -662,10 +685,34 @@ namespace AntiCrack_DotNet
                         return false;
                     }
                     VirtualFree(AllocatedSpace, SysInfo.PageSize, MEM_RELEASE);
+                    OnDetected?.Invoke();
                     return true;
                 }
             }
             return false;
+        }
+
+        public void Dispose()
+        {
+            if (!CancellationTokenSource.IsCancellationRequested)
+            {
+                CancellationTokenSource.Cancel();
+            }
+            if(_windows)
+            {
+                StopWindowAntiDebug();
+            }
+            if (_taskLock != null)
+            {
+                _taskLock.Dispose();
+            }
+            if (OnDetected != null)
+            {
+                foreach (var d in OnDetected.GetInvocationList())
+                {
+                    OnDetected -= (Action)d;
+                }
+            }
         }
     }
 }
