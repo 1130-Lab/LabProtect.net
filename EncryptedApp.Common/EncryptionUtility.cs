@@ -1,4 +1,5 @@
-﻿using System.Data.SqlTypes;
+﻿using System.Collections.Immutable;
+using System.Data.SqlTypes;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -113,36 +114,57 @@ namespace EncryptedApp.Common
             Random rand = new Random(seed);
             if (!Directory.Exists(folderPath))
                 throw new DirectoryNotFoundException($"The directory '{folderPath}' does not exist.");
-            var files = Directory.GetFiles(folderPath, filter, search);
-            byte[]? allBytes = null;
+            var files = Directory.GetFiles(folderPath, filter, search).ToImmutableSortedSet();
+            int totalBytes = 0;
+            Dictionary<string, byte[]> samples = new Dictionary<string, byte[]>();
+            object lockObj = new object();
 
             using (SHA512 sha = SHA512.Create())
             {
-                foreach (var assemblyFile in files)
+                var result = Parallel.ForEach(files, (assemblyFile) =>
                 {
-                    byte[] buffer = new byte[sampleSize];
-                    byte[] executableBytes = File.ReadAllBytes(assemblyFile);
-                    if (executableBytes.Length > sampleSize)
+                    FileInfo info = new FileInfo(assemblyFile);
+                    // If our file is more than int.MaxValue bytes, we clamp it to int.MaxValue.
+                    int effectiveFileSize = info.Length > int.MaxValue ? int.MaxValue : (int)info.Length;
+                    int bufferSize = (int)Math.Min(sampleSize, effectiveFileSize);
+                    bool entireFile = bufferSize == effectiveFileSize;
+                    byte[] buffer = new byte[bufferSize];
+
+                    Interlocked.Add(ref totalBytes, bufferSize);
+
+                    if (!entireFile)
                     {
-                        byte[] sampledBytes = new byte[sampleSize];
-                        for (int i = 0; i < sampleSize; i++)
+                        using (var byteStream = new FileStream(assemblyFile, FileMode.Open, FileAccess.Read))
                         {
-                            int index = rand.Next(executableBytes.Length);
-                            sampledBytes[i] = executableBytes[index];
+                            for (int i = 0; i < bufferSize; i++)
+                            {
+                                long start = rand.Next(0, effectiveFileSize);
+                                byteStream.Seek(start, SeekOrigin.Begin);
+                                int byteRead = byteStream.ReadByte();
+                                buffer[i] = (byte)byteRead;
+                            }
                         }
-                        executableBytes = sampledBytes;
-                    }
-                    if (allBytes == null)
-                    {
-                        allBytes = executableBytes;
                     }
                     else
                     {
-                        byte[] newBytes = new byte[allBytes.Length + executableBytes.Length];
-                        Buffer.BlockCopy(allBytes, 0, newBytes, 0, allBytes.Length);
-                        Buffer.BlockCopy(executableBytes, 0, newBytes, allBytes.Length, executableBytes.Length);
-                        allBytes = newBytes;
+                        buffer = File.ReadAllBytes(assemblyFile);
                     }
+                    lock (lockObj)
+                    {
+                        samples.Add(assemblyFile, buffer);
+                    }
+                });
+
+                while (!result.IsCompleted && files.FirstOrDefault(t => samples.ContainsKey(t) == false) != null) ;
+                
+                byte[] allBytes = new byte[totalBytes];
+                int offset = 0;
+                // Read the samples and copy them to allBytes in definite order
+                foreach (var assemblyFile in files)
+                {
+                    var sample = samples[assemblyFile];
+                    Buffer.BlockCopy(sample, 0, allBytes, 0, sample.Length);
+                    offset += sample.Length;
                 }
                 return sha.ComputeHash(allBytes);
             }
@@ -162,7 +184,7 @@ namespace EncryptedApp.Common
         {
             if (!Directory.Exists(folderPath))
                 throw new DirectoryNotFoundException($"The directory '{folderPath}' does not exist.");
-            var files = Directory.GetFiles(folderPath, filter, search);
+            var files = Directory.GetFiles(folderPath, filter, search).ToImmutableSortedSet();
             using (SHA512 sha = SHA512.Create())
             {
                 foreach (var assemblyFile in files)
@@ -186,22 +208,31 @@ namespace EncryptedApp.Common
         {
             if (!Directory.Exists(folderPath))
                 throw new DirectoryNotFoundException($"The directory '{folderPath}' does not exist.");
-            var files = Directory.GetFiles(folderPath, filter, search);
-            byte[]? allBytes = null;
+            var files = Directory.GetFiles(folderPath, filter, search).ToImmutableSortedSet();
+            int totalBytes = 0;
+            Dictionary<string, byte[]> samples = new Dictionary<string, byte[]>();
+            object lockObj = new object();
+            var result = Parallel.ForEach(files, (assemblyFile) =>
+            {
+                byte[] buffer = File.ReadAllBytes(assemblyFile);
+
+                Interlocked.Add(ref totalBytes, buffer.Length);
+
+                lock (lockObj)
+                {
+                    samples.Add(assemblyFile, buffer);
+                }
+            });
+
+            while (!result.IsCompleted && files.FirstOrDefault(t => samples.ContainsKey(t) == false) != null) ;
+            byte[] allBytes = new byte[totalBytes];
+            int offset = 0;
+            // Read the samples and copy them to allBytes in definite order
             foreach (var assemblyFile in files)
             {
-                byte[] executableBytes = File.ReadAllBytes(assemblyFile);
-                if (allBytes == null)
-                {
-                    allBytes = executableBytes;
-                }
-                else
-                {
-                    byte[] newBytes = new byte[allBytes.Length + executableBytes.Length];
-                    Buffer.BlockCopy(allBytes, 0, newBytes, 0, allBytes.Length);
-                    Buffer.BlockCopy(executableBytes, 0, newBytes, allBytes.Length, executableBytes.Length);
-                    allBytes = newBytes;
-                }
+                var sample = samples[assemblyFile];
+                Buffer.BlockCopy(sample, 0, allBytes, 0, sample.Length);
+                offset += sample.Length;
             }
 
             using (SHA512 sha = SHA512.Create())
@@ -212,7 +243,7 @@ namespace EncryptedApp.Common
 
         public static byte[] GetSHA512Checksum()
         {
-            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies().ToImmutableSortedSet();
             byte[]? allBytes = null;
             foreach (var assembly in assemblies)
             {
