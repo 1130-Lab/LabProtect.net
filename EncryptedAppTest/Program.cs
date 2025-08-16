@@ -40,7 +40,7 @@ namespace EncryptedAppTest
             Console.WriteLine("Modules downloaded.");
             if (result.IsSuccessStatusCode)
             {
-                byte[] checksum = EncryptionUtility.GetSHA512Checksum();
+                byte[] checksum = EncryptionUtility.GetSHA512ChecksumSubsampledFromFolder(Directory.GetCurrentDirectory(), 50, 65536);
                 List<EncryptedModule>? modules = await result.Content.ReadFromJsonAsync<List<EncryptedModule>>();
                 if (modules != null)
                 {
@@ -91,7 +91,7 @@ namespace EncryptedAppTest
                 switch(parts[0])
                 {
                     case "--dumpchecksumf":
-                        byte[] checksumFilebased = EncryptionUtility.GetSHA512ChecksumFromFolder(Directory.GetCurrentDirectory());
+                        byte[] checksumFilebased = EncryptionUtility.GetSHA512ChecksumSubsampledFromFolder(Directory.GetCurrentDirectory(), 50, 65536);
                         File.WriteAllBytes("checksum.bin", checksumFilebased);
                         break;
                     case "--dumpchecksum":

@@ -97,6 +97,91 @@ namespace EncryptedApp.Common
             }
         }
 
+        /// <summary>
+        /// Takes a seed value and optional sample size, then randomly selects bytes from each dll to generate the checksum.
+        /// Useful for large assemblies where a full checksum would be too slow.
+        /// </summary>
+        /// <param name="folderPath"></param>
+        /// <param name="seed"></param>
+        /// <param name="sampleSize"></param>
+        /// <param name="search"></param>
+        /// <param name="filter"></param>
+        /// <returns></returns>
+        /// <exception cref="DirectoryNotFoundException"></exception>
+        public static byte[] GetSHA512ChecksumSubsampledFromFolder(string folderPath, int seed, int sampleSize = 1024 * 1024 * 50, SearchOption search = SearchOption.AllDirectories, string filter = "*.dll")
+        {
+            Random rand = new Random(seed);
+            if (!Directory.Exists(folderPath))
+                throw new DirectoryNotFoundException($"The directory '{folderPath}' does not exist.");
+            var files = Directory.GetFiles(folderPath, filter, search);
+            byte[]? allBytes = null;
+
+            using (SHA512 sha = SHA512.Create())
+            {
+                foreach (var assemblyFile in files)
+                {
+                    byte[] buffer = new byte[sampleSize];
+                    byte[] executableBytes = File.ReadAllBytes(assemblyFile);
+                    if (executableBytes.Length > sampleSize)
+                    {
+                        byte[] sampledBytes = new byte[sampleSize];
+                        for (int i = 0; i < sampleSize; i++)
+                        {
+                            int index = rand.Next(executableBytes.Length);
+                            sampledBytes[i] = executableBytes[index];
+                        }
+                        executableBytes = sampledBytes;
+                    }
+                    if (allBytes == null)
+                    {
+                        allBytes = executableBytes;
+                    }
+                    else
+                    {
+                        byte[] newBytes = new byte[allBytes.Length + executableBytes.Length];
+                        Buffer.BlockCopy(allBytes, 0, newBytes, 0, allBytes.Length);
+                        Buffer.BlockCopy(executableBytes, 0, newBytes, allBytes.Length, executableBytes.Length);
+                        allBytes = newBytes;
+                    }
+                }
+                return sha.ComputeHash(allBytes);
+            }
+        }
+
+        /// <summary>
+        /// Incrementally computes the SHA512 checksum of all files in a folder.
+        /// Useful for large folders where loading entire file into memory is impractical.
+        /// </summary>
+        /// <param name="folderPath"></param>
+        /// <param name="sampleSize"></param>
+        /// <param name="search"></param>
+        /// <param name="filter"></param>
+        /// <returns></returns>
+        /// <exception cref="DirectoryNotFoundException"></exception>
+        public static byte[] GetSHA512ChecksumIncrementalFromFolder(string folderPath, int sampleSize = 1024 * 1024, SearchOption search = SearchOption.AllDirectories, string filter = "*.dll")
+        {
+            if (!Directory.Exists(folderPath))
+                throw new DirectoryNotFoundException($"The directory '{folderPath}' does not exist.");
+            var files = Directory.GetFiles(folderPath, filter, search);
+            using (SHA512 sha = SHA512.Create())
+            {
+                foreach (var assemblyFile in files)
+                {
+                    byte[] buffer = new byte[sampleSize];
+                    byte[] executableBytes = File.ReadAllBytes(assemblyFile);
+                    int bytesRead = 0;
+                    using (var stream = File.OpenRead(assemblyFile))
+                    {
+                        while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            sha.TransformBlock(buffer, 0, bytesRead, null, 0);
+                        }
+                    }
+                }
+                return sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            }
+        }
+
         public static byte[] GetSHA512ChecksumFromFolder(string folderPath, SearchOption search = SearchOption.AllDirectories, string filter = "*.dll")
         {
             if (!Directory.Exists(folderPath))
