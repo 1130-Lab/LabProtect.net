@@ -5,6 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>LabProtect.net</Title>
+    <Authors>1130 Lab</Authors>
+    <Company>1130 Lab</Company>
+	<Version>1.0.0.3</Version>
   </PropertyGroup>
 
   <ItemGroup>

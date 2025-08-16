@@ -3,7 +3,6 @@ using EncryptedApp.Common;
 using EncryptedApp.Common.AntiCrack_DotNet;
 using System.Net.Http.Json;
 using System.Reflection;
-using System.Security.Cryptography;
 
 namespace EncryptedAppTest
 {
@@ -18,16 +17,16 @@ namespace EncryptedAppTest
         static async Task Main(string[] args)
         {
             _antiSniff.Start();
-            _antiSniff.OnDetected += () =>
+            _antiSniff.OnDetected += (source) =>
             {
-                Console.WriteLine("Anti-sniff detected! Exiting...");
+                Console.WriteLine($"Anti-sniff detected! Source: {source}. Exiting...");
                 Environment.Exit(1);
             };
 #if !DEBUG
             _antiDebug.Start();
-            _antiDebug.OnDetected += () =>
+            _antiDebug.OnDetected += (source) =>
             {
-                Console.WriteLine("Anti-debug detected! Exiting...");
+                Console.WriteLine($"Anti-debug detected! Source: {source}. Exiting...");
                 Environment.Exit(1);
             };
 #endif 
@@ -41,7 +40,7 @@ namespace EncryptedAppTest
             Console.WriteLine("Modules downloaded.");
             if (result.IsSuccessStatusCode)
             {
-                byte[] checksum = GetSHA512Checksum();
+                byte[] checksum = EncryptionUtility.GetSHA512Checksum();
                 List<EncryptedModule>? modules = await result.Content.ReadFromJsonAsync<List<EncryptedModule>>();
                 if (modules != null)
                 {
@@ -92,7 +91,7 @@ namespace EncryptedAppTest
                 switch(parts[0])
                 {
                     case "--dumpchecksum":
-                        byte[] checksum = GetSHA512Checksum();
+                        byte[] checksum = EncryptionUtility.GetSHA512Checksum();
                         File.WriteAllBytes("checksum.bin", checksum);
                         break;
                     case "--address":
@@ -102,26 +101,6 @@ namespace EncryptedAppTest
                         }
                         break;
                 }
-            }
-        }
-
-        private static byte[] GetSHA512Checksum()
-        {
-            string? assemblyName = Assembly.GetExecutingAssembly().GetName().Name;
-            if(assemblyName == null)
-            {
-                throw new Exception("Assembly name is null.");
-            }
-            byte[] executableBytes = File.ReadAllBytes($"{assemblyName}.exe");
-            byte[] dllBytes = File.ReadAllBytes($"{assemblyName}.dll");
-
-            byte[] allBytes = new byte[executableBytes.Length + dllBytes.Length];
-            Buffer.BlockCopy(executableBytes, 0, allBytes, 0, executableBytes.Length);
-            Buffer.BlockCopy(dllBytes, 0, allBytes, executableBytes.Length, dllBytes.Length);
-
-            using (SHA512 sha = SHA512.Create())
-            {
-                return sha.ComputeHash(allBytes);
             }
         }
     }

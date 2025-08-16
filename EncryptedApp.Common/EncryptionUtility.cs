@@ -1,4 +1,6 @@
-﻿using System.Security.Cryptography;
+﻿using System.Data.SqlTypes;
+using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -92,6 +94,37 @@ namespace EncryptedApp.Common
                     Array.Clear(password, 0, password.Length);
                     GC.Collect();
                 }
+            }
+        }
+
+        public static byte[] GetSHA512Checksum()
+        {
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            byte[]? allBytes = null;
+            foreach (var assembly in assemblies)
+            {
+                string assemblyFile = $"{assembly.GetName().Name}.dll";
+                if(!File.Exists(assemblyFile))
+                {
+                    continue; // Skip if the file does not exist
+                }
+                byte[] executableBytes = File.ReadAllBytes(assemblyFile);
+                if(allBytes == null)
+                {
+                    allBytes = executableBytes;
+                }
+                else
+                {
+                    byte[] newBytes = new byte[allBytes.Length + executableBytes.Length];
+                    Buffer.BlockCopy(allBytes, 0, newBytes, 0, allBytes.Length);
+                    Buffer.BlockCopy(executableBytes, 0, newBytes, allBytes.Length, executableBytes.Length);
+                    allBytes = newBytes;
+                }
+            }
+
+            using (SHA512 sha = SHA512.Create())
+            {
+                return sha.ComputeHash(allBytes);
             }
         }
 

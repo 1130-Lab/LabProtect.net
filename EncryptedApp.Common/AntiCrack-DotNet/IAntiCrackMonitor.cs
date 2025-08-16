@@ -4,7 +4,7 @@ namespace EncryptedApp.Common.AntiCrack_DotNet
 {
     public interface IAntiCrackMonitor : IDisposable
     {
-        public Action? OnDetected { get; set; }
+        public Action<string>? OnDetected { get; set; }
         public CancellationTokenSource CancellationTokenSource { get; }
 
         /// <summary>
