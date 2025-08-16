@@ -97,6 +97,34 @@ namespace EncryptedApp.Common
             }
         }
 
+        public static byte[] GetSHA512ChecksumFromFolder(string folderPath, SearchOption search = SearchOption.AllDirectories, string filter = "*.dll")
+        {
+            if (!Directory.Exists(folderPath))
+                throw new DirectoryNotFoundException($"The directory '{folderPath}' does not exist.");
+            var files = Directory.GetFiles(folderPath, filter, search);
+            byte[]? allBytes = null;
+            foreach (var assemblyFile in files)
+            {
+                byte[] executableBytes = File.ReadAllBytes(assemblyFile);
+                if (allBytes == null)
+                {
+                    allBytes = executableBytes;
+                }
+                else
+                {
+                    byte[] newBytes = new byte[allBytes.Length + executableBytes.Length];
+                    Buffer.BlockCopy(allBytes, 0, newBytes, 0, allBytes.Length);
+                    Buffer.BlockCopy(executableBytes, 0, newBytes, allBytes.Length, executableBytes.Length);
+                    allBytes = newBytes;
+                }
+            }
+
+            using (SHA512 sha = SHA512.Create())
+            {
+                return sha.ComputeHash(allBytes);
+            }
+        }
+
         public static byte[] GetSHA512Checksum()
         {
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();

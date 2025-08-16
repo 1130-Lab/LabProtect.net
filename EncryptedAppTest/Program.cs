@@ -90,9 +90,13 @@ namespace EncryptedAppTest
                 string[] parts = arg.Split('=');
                 switch(parts[0])
                 {
+                    case "--dumpchecksumf":
+                        byte[] checksumFilebased = EncryptionUtility.GetSHA512ChecksumFromFolder(Directory.GetCurrentDirectory());
+                        File.WriteAllBytes("checksum.bin", checksumFilebased);
+                        break;
                     case "--dumpchecksum":
-                        byte[] checksum = EncryptionUtility.GetSHA512Checksum();
-                        File.WriteAllBytes("checksum.bin", checksum);
+                        byte[] checksumRuntime = EncryptionUtility.GetSHA512Checksum();
+                        File.WriteAllBytes("checksum.bin", checksumRuntime);
                         break;
                     case "--address":
                         if(parts.Length > 1)
